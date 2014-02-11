@@ -32,12 +32,22 @@
             type : 'circle',
             position : 'down', // down, up, left, leftup (upleft)
             animation : 'slide',
+            notification: 'jump',
             fallbackUrl : '//favico.jit.su/image',
             elementId : false
         };
-        var element, height, width, canvas, ctx, tempImg, isReady, isLastFrame, isRunning, isReadyCb, stop, browser, animationTimer, drawTimer;
+        var element, height, width, canvas, ctx, tempImg, isReady, isBadgeDisplayed, isRunning, isReadyCb, stop, browser, animationTimer, drawTimer;
 
         var queue = [];
+
+        var timer = null;
+        var iconAnimationLifeTime = 0;
+        var iconAnimationMaxLife = 100;
+        var animationState = {
+            badge: null,
+            icon: null,
+            iconStopFrame: null
+        };
 
         params = (params) ? params : {};
         isReadyCb = function() {
@@ -127,7 +137,7 @@
         icon.reset = function() {
             queue = [];
             isRunning = false;
-            isLastFrame = false;
+            isBadgeDisplayed = false;
             if (browser.supported) {
                 ctx.clearRect(0, 0, width, height);
                 ctx.drawImage(tempImg, 0, 0, width, height);
@@ -142,36 +152,19 @@
          * Start animation
          */
         icon.start = function() {
-            if (!isReady || isRunning) {
+            if (!isReady) {
                 return;
             }
-            var finished = function() {
-                isLastFrame = queue[0];
-                isRunning = false;
-                if (queue.length > 0) {
-                    queue.shift();
-                    icon.start();
-                } else {
 
-                }
-            };
-            if (queue.length > 0) {
-                isRunning = true;
-                var run = function() {
-                    animation.run(queue[0].options, function() {
-                        finished();
-                    }, false);
-                };
-                if (isLastFrame) {
-                    animation.run(isLastFrame.options, function() {
-                        run();
-                    }, true);
-                } else {
-                    run();
-                }
+            if (timer == null) {
+                animationState.badge = isBadgeDisplayed ? -animation.animationType().length : 0;
+                animationState.icon = 0;
+                iconAnimationLifeTime = iconAnimationMaxLife;
+                animation.run();
             }
-        };
 
+        };
+;
         /**
          * Badge types
          */
@@ -185,6 +178,48 @@
             opt.len = ("" + opt.n).length;
             return opt;
         };
+
+        /**
+         * Draw favion to context
+         * @param {Object} opt Badge options
+         */
+        var drawIcon = function(frame) {
+            var pos;
+            if (frame) {
+                pos = notification.type[params.notification].position(frame);
+            } else {
+                pos = notification.base();
+            }
+
+            var base = notification.base();
+            ctx.drawImage(tempImg, pos.x, pos.y, pos.w, pos.h);
+            ctx.translate(base.w / 2.0, base.h / 2.0);
+            ctx.rotate(pos.r);
+            ctx.translate(base.w / -2.0, base.h / -2.0);
+            if (frame > iconAnimationLifeTime){
+                stopAnimation();
+            }
+        }
+
+        var clearContext = function() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        var drawBadge = function(frame, opt) {
+            isBadgeDisplayed = true;
+            var animationType = animation.animationType();
+            if (frame === null || frame < -animationType.length || animationType.length < frame) {
+                frame = animationType.length;
+            }
+            type[params.type](merge(opt, animationType.position(frame)));
+        };
+
+        var stopAnimation = function() {
+            animationState.icon = null;
+            isRunning = false;
+        }
+
+
         /**
          * Generate circle
          * @param {Object} opt Badge options
@@ -205,8 +240,6 @@
             var bgColor = hexToRgb(badgeParams.bgColor);
             var textColor = hexToRgb(badgeParams.textColor);
 
-            ctx.clearRect(0, 0, width, height);
-            ctx.drawImage(tempImg, 0, 0, width, height);
             ctx.beginPath();
             ctx.font = badgeParams.fontStyle + " " + Math.floor(opt.h * (opt.n > 99 ? .85 : 1)) + "px " + badgeParams.fontFamily;
             ctx.textAlign = 'center';
@@ -585,7 +618,12 @@
         animation.generator.animationPosition = function(start, end, frame, frameLength, timing){
             animation.generator.adjustPosition(start);
             animation.generator.adjustPosition(end);
-
+            if (frame == null) {
+                return end;
+            }
+            if (frame < 0) {
+                frame = -frame;
+            }
             timing = ( typeof timing !== 'undefined') ? timing : 'linear';
             var progress = animation.generator.animationTiming[timing](frame, frameLength);
 
@@ -690,6 +728,10 @@
             return animation.generator.animationPosition(start, animation.generator.defaultEnd(), frame, animation.types.popFade.length);
         };
 
+        animation.animationType = function(){
+            return animation.types[isPageHidden() ? 'none' : params.animation];
+        }
+
         /**
          * Run animation
          * @param {Object} opt Animation options
@@ -697,32 +739,114 @@
          * @param {Object} revert Reverse order? true|false
          * @param {Object} frame Optional frame number
          */
-        animation.run = function(opt, cb, revert, frame) {
-            var animationType = animation.types[isPageHidden() ? 'none' : params.animation];
-            if (revert === true) {
-                frame = ( typeof frame !== 'undefined') ? frame : animationType.length - 1;
-            } else {
-                frame = ( typeof frame !== 'undefined') ? frame : 0;
-            }
-            cb = (cb) ? cb : function() {
-            };
-            if ((frame < animationType.length) && (frame >= 0)) {
-                type[params.type](merge(opt, animationType.position(frame)));
 
-                animationTimer = setTimeout(function() {
-                    if (revert) {
-                        frame = frame - 1;
-                    } else {
-                        frame = frame + 1;
+        animation.run = function() {
+            var badgeOpt = animation.badgeNumber();
+
+            clearContext();
+            drawIcon(animationState.icon);
+            drawBadge(animationState.badge, badgeOpt);
+
+            var el = document.getElementById('testdiv');
+            el.appendChild(canvas);
+
+            console.log(animationState, badgeOpt);
+            if (animationState.icon != null || animationState.badge != null) {
+                timer = setTimeout(function() {
+                    if (animationState.icon != null) {
+                        animationState.icon++;
                     }
-                    animation.run(opt, cb, revert, frame);
+
+                    if (animationState.badge != null) {
+                        animationState.badge++;
+                    }
+
+                    if (animationState.badge == animation.animationType().length) {
+                        animation.finish();
+                    }
+                    animation.run();
                 }, animation.duration);
 
                 link.setIcon(canvas);
+
             } else {
-                cb();
+                timer = null;
+            }
+
+        };
+
+        animation.finish = function() {
+            var animationType = animation.animationType();
+            if (queue.length > 1) {
+                animationState.badge = -animationType.length;
+                iconAnimationLifeTime = animationState.icon + iconAnimationMaxLife;
+            } else {
+                animationState.badge = null;
             }
         };
+
+        animation.badgeNumber = function(){
+            if (animationState.badge != 0) {
+                return queue[0].options;
+            }
+            if (queue.length > 1) {
+                queue.shift();
+            }
+            return queue[0].options;
+        };
+
+
+        var notification = {};
+        notification.base = function(){
+            return {
+                x: 0,
+                y: 0,
+                w: 32,
+                h: 32,
+                r: 0
+            };
+        };
+
+        notification.type = {};
+        notification.type.jump = {};
+        notification.type.jump.length = 30;
+        notification.type.jump.position = function(frame) {
+            var base = notification.base();
+            var pos = notification.base();
+            var len = notification.type.jump.length;
+            pos.w = base.w;
+            pos.h = base.h * (.7 + .2 * Math.cos(Math.PI * frame % len / len - 1));
+            pos.x = (base.w - pos.w) * .5;
+            pos.y = (base.h - pos.h)  - (base.h * Math.sin(Math.PI * frame % len / len)) * .3;
+            pos.r = 0;
+            return pos;
+        };
+
+        notification.type.rotate = {};
+        notification.type.rotate.length = 30;
+        notification.type.rotate.position = function(frame) {
+            var pos = notification.base();
+            var len = notification.type.rotate.length;
+            pos.r = 360 / len;
+            return pos;
+        };
+
+        notification.type.ring = {};
+        notification.type.ring.length = 20;
+        notification.type.ring.position = function(frame) {
+            var pos = notification.base();
+            var len = notification.type.ring.length;
+            if (frame < 5 || frame >= 15){
+                console.log('r');
+                pos.r = 5 * Math.PI / 180;
+            } else {
+                console.log('l');
+
+                pos.r = -5 * Math.PI / 180;
+            }
+            return pos;
+        };
+
 
         /**
          * Auto init
