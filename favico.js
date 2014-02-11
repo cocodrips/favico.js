@@ -42,7 +42,7 @@
 
         var timer = null;
         var iconAnimationLifeTime = 0;
-        var iconAnimationMaxLife = 100;
+        var iconAnimationMaxLoop = 20;
         var animationState = {
             badge: null,
             icon: null,
@@ -159,7 +159,7 @@
             if (timer == null) {
                 animationState.badge = isBadgeDisplayed ? -animation.animationType().length : 0;
                 animationState.icon = 0;
-                iconAnimationLifeTime = iconAnimationMaxLife;
+                iconAnimationLifeTime = iconAnimationMaxLoop * notification.type[params.notification].length;
                 animation.run();
             }
 
@@ -179,6 +179,10 @@
             return opt;
         };
 
+
+        var clearContext = function() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
         /**
          * Draw favion to context
          * @param {Object} opt Badge options
@@ -192,17 +196,15 @@
             }
 
             var base = notification.base();
+
             ctx.drawImage(tempImg, pos.x, pos.y, pos.w, pos.h);
             ctx.translate(base.w / 2.0, base.h / 2.0);
             ctx.rotate(pos.r);
             ctx.translate(base.w / -2.0, base.h / -2.0);
+
             if (frame > iconAnimationLifeTime){
                 stopAnimation();
             }
-        }
-
-        var clearContext = function() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
 
         var drawBadge = function(frame, opt) {
@@ -739,7 +741,6 @@
          * @param {Object} revert Reverse order? true|false
          * @param {Object} frame Optional frame number
          */
-
         animation.run = function() {
             var badgeOpt = animation.badgeNumber();
 
@@ -747,10 +748,6 @@
             drawIcon(animationState.icon);
             drawBadge(animationState.badge, badgeOpt);
 
-            var el = document.getElementById('testdiv');
-            el.appendChild(canvas);
-
-            console.log(animationState, badgeOpt);
             if (animationState.icon != null || animationState.badge != null) {
                 timer = setTimeout(function() {
                     if (animationState.icon != null) {
@@ -770,6 +767,7 @@
                 link.setIcon(canvas);
 
             } else {
+//                clearTimeout(timer);
                 timer = null;
             }
 
@@ -779,7 +777,7 @@
             var animationType = animation.animationType();
             if (queue.length > 1) {
                 animationState.badge = -animationType.length;
-                iconAnimationLifeTime = animationState.icon + iconAnimationMaxLife;
+                iconAnimationLifeTime = animationState.icon + iconAnimationMaxLife * notification.type[params.notification].length;
             } else {
                 animationState.badge = null;
             }
@@ -809,16 +807,16 @@
 
         notification.type = {};
         notification.type.jump = {};
-        notification.type.jump.length = 30;
+        notification.type.jump.length = 10;
         notification.type.jump.position = function(frame) {
             var base = notification.base();
             var pos = notification.base();
             var len = notification.type.jump.length;
-            pos.w = base.w;
-            pos.h = base.h * (.7 + .2 * Math.cos(Math.PI * frame % len / len - 1));
-            pos.x = (base.w - pos.w) * .5;
-            pos.y = (base.h - pos.h)  - (base.h * Math.sin(Math.PI * frame % len / len)) * .3;
-            pos.r = 0;
+            frame %= len;
+
+            pos.y = base.h * 0.8 * frame * (len - frame - 1) / Math.pow(len - 1, 2);
+            pos.h = base.h - pos.y;
+            console.log(pos.y);
             return pos;
         };
 
@@ -835,13 +833,9 @@
         notification.type.ring.length = 20;
         notification.type.ring.position = function(frame) {
             var pos = notification.base();
-            var len = notification.type.ring.length;
             if (frame < 5 || frame >= 15){
-                console.log('r');
                 pos.r = 5 * Math.PI / 180;
             } else {
-                console.log('l');
-
                 pos.r = -5 * Math.PI / 180;
             }
             return pos;
