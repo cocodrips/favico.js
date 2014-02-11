@@ -156,15 +156,15 @@
                 return;
             }
 
+            animationState.badge = isBadgeDisplayed ? -animation.animationType().length : 0;
+            animationState.icon = 0;
             if (timer == null) {
-                animationState.badge = isBadgeDisplayed ? -animation.animationType().length : 0;
-                animationState.icon = 0;
                 iconAnimationLifeTime = iconAnimationMaxLoop * notification.type[params.notification].length;
                 animation.run();
             }
 
         };
-;
+
         /**
          * Badge types
          */
@@ -777,7 +777,7 @@
             var animationType = animation.animationType();
             if (queue.length > 1) {
                 animationState.badge = -animationType.length;
-                iconAnimationLifeTime = animationState.icon + iconAnimationMaxLife * notification.type[params.notification].length;
+                iconAnimationLifeTime = animationState.icon + iconAnimationMaxLoop * notification.type[params.notification].length;
             } else {
                 animationState.badge = null;
             }
@@ -816,7 +816,6 @@
 
             pos.y = base.h * 0.8 * frame * (len - frame - 1) / Math.pow(len - 1, 2);
             pos.h = base.h - pos.y;
-            console.log(pos.y);
             return pos;
         };
 
