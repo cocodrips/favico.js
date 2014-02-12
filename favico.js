@@ -32,7 +32,7 @@
             type : 'circle',
             position : 'down', // down, up, left, leftup (upleft)
             animation : 'slide',
-            notification: 'jump',
+            notification: 'none',
             fallbackUrl : '//favico.jit.su/image',
             elementId : false
         };
@@ -45,8 +45,7 @@
         var iconAnimationMaxLoop = 20;
         var animationState = {
             badge: null,
-            icon: null,
-            iconStopFrame: null
+            icon: null
         };
 
         params = (params) ? params : {};
@@ -158,11 +157,10 @@
 
             animationState.badge = isBadgeDisplayed ? -animation.animationType().length : 0;
             animationState.icon = 0;
-            if (timer == null) {
+            if (timer === null) {
                 iconAnimationLifeTime = iconAnimationMaxLoop * notification.type[params.notification].length;
                 animation.run();
             }
-
         };
 
         /**
@@ -185,28 +183,30 @@
         }
         /**
          * Draw favion to context
-         * @param {Object} opt Badge options
+         * @param {Number} frame
          */
         var drawIcon = function(frame) {
             var pos;
+            notification.adjustAnimationLength();
+
             if (frame) {
-                pos = notification.type[params.notification].position(frame);
+                var notificationType = notification.type[params.notification];
+                pos = notificationType.position(frame);
             } else {
                 pos = notification.base();
             }
 
-            var base = notification.base();
-
             ctx.drawImage(tempImg, pos.x, pos.y, pos.w, pos.h);
-            ctx.translate(base.w / 2.0, base.h / 2.0);
-            ctx.rotate(pos.r);
-            ctx.translate(base.w / -2.0, base.h / -2.0);
 
             if (frame > iconAnimationLifeTime){
                 stopAnimation();
             }
         }
 
+        /**
+         * Draw badge to context
+         * @param {Number, Object} frame, opt Badge options
+         */
         var drawBadge = function(frame, opt) {
             isBadgeDisplayed = true;
             var animationType = animation.animationType();
@@ -271,6 +271,7 @@
             }
             ctx.closePath();
         };
+
         /**
          * Generate rectangle
          * @param {Object} opt Badge options
@@ -763,14 +764,11 @@
                     }
                     animation.run();
                 }, animation.duration);
-
                 link.setIcon(canvas);
-
             } else {
-//                clearTimeout(timer);
+                clearTimeout(timer);
                 timer = null;
             }
-
         };
 
         animation.finish = function() {
@@ -793,8 +791,11 @@
             return queue[0].options;
         };
 
-
+        /**
+         * @namespace notification
+         */
         var notification = {};
+        notification.prevUpdate = null;
         notification.base = function(){
             return {
                 x: 0,
@@ -805,9 +806,32 @@
             };
         };
 
+        /**
+         *  Change animation length when the tab running background.
+         *  Because browse doesn't run javascript on background tabs so often.
+         **/
+        notification.adjustAnimationLength = function() {
+            var time = new Date().getTime();
+            if (notification.prevUpdate != null){
+                var notificationType = notification.type[params.notification];
+                if(time - notification.prevUpdate > 100){
+                    if (!notificationType.originallength){
+                        notificationType.originallength = notificationType.length;
+                        notificationType.length = 3;
+                    }
+                } else {
+                    if (notificationType.originallength){
+                        notificationType.length = notificationType.originallength;
+                    }
+                    notificationType.originallength = null;
+                }
+            }
+            notification.prevUpdate = time;
+        };
+
         notification.type = {};
         notification.type.jump = {};
-        notification.type.jump.length = 10;
+        notification.type.jump.length = 20;
         notification.type.jump.position = function(frame) {
             var base = notification.base();
             var pos = notification.base();
@@ -819,25 +843,10 @@
             return pos;
         };
 
-        notification.type.rotate = {};
-        notification.type.rotate.length = 30;
-        notification.type.rotate.position = function(frame) {
-            var pos = notification.base();
-            var len = notification.type.rotate.length;
-            pos.r = 360 / len;
-            return pos;
-        };
-
-        notification.type.ring = {};
-        notification.type.ring.length = 20;
-        notification.type.ring.position = function(frame) {
-            var pos = notification.base();
-            if (frame < 5 || frame >= 15){
-                pos.r = 5 * Math.PI / 180;
-            } else {
-                pos.r = -5 * Math.PI / 180;
-            }
-            return pos;
+        notification.type.none = {};
+        notification.type.none.length = 1;
+        notification.type.none.position = function(frame) {
+            return notification.base();
         };
 
 
